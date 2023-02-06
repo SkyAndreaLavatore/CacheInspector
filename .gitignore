@@ -1,0 +1,13 @@
+/target/
+/CacheInspector.log
+/CacheInspector.log.lck
+/Salesforce.log.lck
+/Salesforce.log
+/.idea/
+/config/DEV.properties
+/config/PREPROD.properties
+/config/PROD.properties
+/config/SIT.properties
+/config/UAT.properties
+/.idea/
+/.idea/
