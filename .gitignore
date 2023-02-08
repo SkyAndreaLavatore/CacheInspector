@@ -9,5 +9,4 @@
 /config/PROD.properties
 /config/SIT.properties
 /config/UAT.properties
-/.idea/
-/.idea/
+/.log/
