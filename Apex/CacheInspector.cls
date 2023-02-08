@@ -25,8 +25,10 @@ global without sharing class CacheInspector implements Queueable
     private static String BASKETACTION = 'basketAction';
 
     Set<vlocity_cmt__CachedAPIResponse__c> cachedAPIResponses;
-    public CacheInspector(Set<vlocity_cmt__CachedAPIResponse__c> cachedAPIResponses) {
+    String cache_type;
+    public CacheInspector(Set<vlocity_cmt__CachedAPIResponse__c> cachedAPIResponses,String cacheType) {
         this.cachedAPIResponses = cachedAPIResponses;
+        this.cache_type = cacheType;
     }
 
     public void execute(QueueableContext context) {
@@ -37,17 +39,19 @@ global without sharing class CacheInspector implements Queueable
             ccks.add(cachedAPIResponse.vlocity_cmt__CacheKey__c);
         }
         System.debug(CLASS_NAME + '.' + METHOD_NAME + ' records filtered: ' + ccks.size());
+
         List<CacheInspector__c> listCacheInspectors = [SELECT CacheKey__c, CatalogCode__c, JsonObject__c FROM CacheInspector__c where CacheKey__c in :ccks];
         for(CacheInspector__c cacheinsp:listCacheInspectors){
             if(ccks.contains(cacheinsp.CacheKey__c))
                 ccks.remove(cacheinsp.CacheKey__c);
         }
+
         System.debug(CLASS_NAME + '.' + METHOD_NAME + ' records remained: ' + ccks.size());
         try
         {
             List<CacheInspector__c> insertCacheInspectors = new List<CacheInspector__c>();
             for(String cck:ccks){
-                insertCacheInspectors.add(createCacheInspector(cck));
+                insertCacheInspectors.add(createCacheInspector(cck,cache_type));
             }
             if(!insertCacheInspectors.isEmpty())
                 Database.insert(insertCacheInspectors, false);
@@ -58,12 +62,13 @@ global without sharing class CacheInspector implements Queueable
         }
     }
 
-    private static CacheInspector__c createCacheInspector(String cartContextKey){
+    private static CacheInspector__c createCacheInspector(String cartContextKey,String cache_type){
         String METHOD_NAME = 'createCacheInspector';
         Map<String,Object> mapObject = new Map<String,Object>();
         Datetime currentTime = Datetime.now();
         Boolean corrupted = false;
-        String cache_type = 'orderConfiguration';
+        //String cache_type = 'orderConfiguration';
+       // String cache_type = cacheType;
         String catalogCode;
         vlocity_cmt__CachedAPIResponse__c cacheApiResponse;
         Decimal previousSeq = 0;
@@ -88,7 +93,7 @@ global without sharing class CacheInspector implements Queueable
 
                 previousSeq = resApiResponse.vlocity_cmt__OverflowSequence__c;
 
-                if(catalogCode==null){
+                if(catalogCode==null && cache_type == 'orderConfiguration'){
                     try{
                         Map<String, Object> mapApiUrl = (Map<String, Object>) JSON.deserializeUntyped(resApiResponse.vlocity_cmt__ApiURL__c);
                         if (mapApiUrl != null && mapApiUrl.containsKey(RESPONSE_CATALOG))
@@ -103,16 +108,31 @@ global without sharing class CacheInspector implements Queueable
             }
             if (cacheApiResponse != null){
                 if(!corrupted)
-                    createMapEngine((Map<String, Object>)JSON.deserializeUntyped(cacheApiResponse.vlocity_cmt__ApiResponse__c), mapObject);
+                    if(cache_type == 'orderConfiguration'){
+                        createMapEngine((Map<String, Object>)JSON.deserializeUntyped(cacheApiResponse.vlocity_cmt__ApiResponse__c), mapObject);
+                    }else if(cache_type == 'itemConfig'){
+                        categorisePostOfferDetails((Map<String, Object>)JSON.deserializeUntyped(cacheApiResponse.vlocity_cmt__ApiResponse__c),mapObject);
+                    }
+
                 else{
                     mapObject.put('corrupted', 'check this cck: ' + cartContextKey);
                     catalogCode ='corrupted';
                 }
-                if(mapObject!=null && catalogCode!=null){
+                if(mapObject!=null && catalogCode!=null && cache_type == 'orderConfiguration'){
                     try{
                         CacheInspector__c cacheInspector = new CacheInspector__c(
                             CacheKey__c = cartContextKey,
                             CatalogCode__c = catalogCode,
+                            JsonObject__c = JSON.serialize(mapObject));
+                            return cacheInspector;
+                    }catch (Exception e) {
+                        System.debug(CLASS_NAME + '.' + METHOD_NAME + ' error CacheInspector: '+e.getMessage());
+                    }
+                }else if(mapObject!=null && cache_type == 'itemConfig'){
+                    try{
+                        CacheInspector__c cacheInspector = new CacheInspector__c(
+                            CacheKey__c = cartContextKey,
+                            CatalogCode__c = 'NA',
                             JsonObject__c = JSON.serialize(mapObject));
                             return cacheInspector;
                     }catch (Exception e) {
@@ -162,6 +182,33 @@ global without sharing class CacheInspector implements Queueable
             listProducts.add(mapProduct);
             mapObject.put('products',listProducts);
         }
+    }
+
+    private static void categorisePostOfferDetails(Map<String, Object> result, Map<String,Object> mapObject){
+        List<Map<String, Object>> listProducts = new List<Map<String, Object>>();
+        Map<String,Object> resultMap = (Map<String,Object>)result.get('result');
+        Map<String,Object> offerDetailsMap = (Map<String,Object>)resultMap.get('offerDetails');
+        Map<String,Object> offerMap = (Map<String,Object>)offerDetailsMap.get('offer');
+        List<Map<String,Object>> productList = new List<Map<String,Object>>();
+        List<String> promoList = new List<String>();
+
+        if(offerMap != null && offerMap.size() > 0){
+            if(offerMap.get('offerType') == 'Promotion'){
+                for(Object childProduct: (List<object>)offerMap.get('childProducts')){
+                    Map<String,object> productMap = new Map<String,Object>();
+                    Map<String,object> childProductMap = (Map<String,Object>)childProduct;
+                    productMap.put((String)childProductMap.get('ProductCode'),new Map<String,object>());
+                    listProducts.add(productMap);
+                }
+                if(offerMap.get('vlocity_cmt__Code__c') != null){
+                    promoList.add((String)offerMap.get('vlocity_cmt__Code__c'));
+                }
+            }
+        }
+
+        mapObject.put('promotions',promoList);
+        mapObject.put('products',listProducts);
+        //System.debug('categorized JSON is-->'+JSON.serialize(mapObject));
     }
 
     private static void getPromotions(Map<String, Object> result, Map<String,Object> mapObject){
