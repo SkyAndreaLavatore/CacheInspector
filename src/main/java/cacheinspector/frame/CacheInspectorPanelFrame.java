@@ -52,8 +52,8 @@ class CacheInspectorPanelFrame extends JTabbedPane  implements Runnable{
         logger.info(CLASS_NAME + '.' + METHOD_NAME + " **** Run progressBar");
         ProgressBar prog = new ProgressBar(200,50,frame.getLocationOnScreen().x+frame.getSize().width/3 , this.getLocationOnScreen().y+frame.getSize().height/3, new Color(185,211,238), new Color(30,144,255));
         prog.setVisible(true);
-        switch (type){
-            case CSV_TYPE:
+        switch (type) {
+            case CSV_TYPE -> {
                 logger.info(CLASS_NAME + '.' + METHOD_NAME + " **** Read Csv");
                 try {
                     ReadCsv readCsv = new ReadCsv();
@@ -69,39 +69,38 @@ class CacheInspectorPanelFrame extends JTabbedPane  implements Runnable{
                 } catch (Exception e) {
                     logger.info(CLASS_NAME + '.' + METHOD_NAME + " **** Exception: " + e.getMessage());
                 }
-                break;
-
-            case SALESFORCE_TYPE:{
+            }
+            case SALESFORCE_TYPE -> {
                 logger.info(CLASS_NAME + '.' + METHOD_NAME + " **** Retrieve records from Salesforce");
                 Integer countId = Salesforce.queryCachedApiResponse();
                 logger.info(CLASS_NAME + '.' + METHOD_NAME + " **** Retrieved " + countId + " records from Salesforce");
                 prog.setVisible(false);
-                int result = JOptionPane.showConfirmDialog(frame,countId + " records will be extracted, do you want to proceed?", "CacheInspector count(" + countId + ")",
+                int result = JOptionPane.showConfirmDialog(frame, countId + " records will be extracted, do you want to proceed?", "CacheInspector count(" + countId + ")",
                         JOptionPane.YES_NO_OPTION,
                         JOptionPane.QUESTION_MESSAGE);
-                if(result == JOptionPane.YES_OPTION){
+                if (result == JOptionPane.YES_OPTION) {
                     logger.info(CLASS_NAME + '.' + METHOD_NAME + " **** extraction confirmed");
-                    SwingProgressBar swingProgressBar = new SwingProgressBar(frame.getLocationOnScreen().x+frame.getSize().width/3 , this.getLocationOnScreen().y+frame.getSize().height/3, countId);
+                    SwingProgressBar swingProgressBar = new SwingProgressBar(frame.getLocationOnScreen().x + frame.getSize().width / 3, this.getLocationOnScreen().y + frame.getSize().height / 3, countId);
                     List<CacheInspectorEntity> cacheInspectorEntityList = Salesforce.queryCacheInspector(swingProgressBar);
                     swingProgressBar.setVisible(false);
                     ObjectMapper mapper = new ObjectMapper();
                     Inspector.clearMap();
-                    for(CacheInspectorEntity cacheInspectorEntity:cacheInspectorEntityList){
+                    for (CacheInspectorEntity cacheInspectorEntity : cacheInspectorEntityList) {
                         try {
                             Map<String, Object> root = mapper.readValue(cacheInspectorEntity.getJsonObject(), Map.class);
-                            Inspector.readJson(cacheInspectorEntity.getCacheKey(), cacheInspectorEntity.getCatalogCode(), root );
+                            Inspector.readJson(cacheInspectorEntity.getCacheKey(), cacheInspectorEntity.getCatalogCode(), root);
                         } catch (Exception e) {
                             logger.info(CLASS_NAME + '.' + METHOD_NAME + " **** Exception " + e.getMessage());
                         }
                     }
-                    logger.info(CLASS_NAME + '.' + METHOD_NAME + " **** products( " + Inspector.getProductMap().size() + ") promotions(" + Inspector.getPromoMap().size() + ") catalogs(" + Inspector.getCatalogMap().size() + ")" );
-                    JComponent skyProducts = new CacheInspectorTreePanel(frame, Inspector.getProductMap(), logger);
+                    logger.info(CLASS_NAME + '.' + METHOD_NAME + " **** products( " + Inspector.getProductMap().size() + ") promotions(" + Inspector.getPromoMap().size() + ") catalogs(" + Inspector.getCatalogMap().size() + ")");
+                    JComponent skyProducts = new CacheInspectorTreePanel(frame, Inspector.getProductMap(), CacheInspectorTreePanel.TYPE_PRODUCTS,  logger);
                     addTab("Products", skyProducts);
                     setMnemonicAt(0, KeyEvent.VK_1);
-                    JComponent skyPromotions = new CacheInspectorTreePanel(frame, Inspector.getPromoMap(), logger);
+                    JComponent skyPromotions = new CacheInspectorTreePanel(frame, Inspector.getPromoMap(), CacheInspectorTreePanel.TYPE_PROMOTIONS, logger);
                     addTab("Promotions", skyPromotions);
                     setMnemonicAt(1, KeyEvent.VK_2);
-                    JComponent skyCatalog = new CacheInspectorTreePanel(frame, Inspector.getCatalogMap(), logger);
+                    JComponent skyCatalog = new CacheInspectorTreePanel(frame, Inspector.getCatalogMap(), CacheInspectorTreePanel.TYPE_CATALOGS, logger);
                     addTab("Catalogs", skyCatalog);
                     setMnemonicAt(2, KeyEvent.VK_3);
                     JComponent basketUIPanelFrame = new BasketUIPanelFrame();
